@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Notifications</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 560px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .status.connected    { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.connecting   { background: #fff3cd; color: #856404; }
+        button {
+            background: #111;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            margin-bottom: 24px;
+            transition: background 0.15s;
+        }
+        button:hover { background: #333; }
+        button:disabled { background: #999; cursor: not-allowed; }
+        .feed {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .feed-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #666;
+            border-bottom: 1px solid #e0e0e0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .feed-empty {
+            padding: 40px 16px;
+            text-align: center;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        .notif {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .notif:last-child { border-bottom: none; }
+        .notif .type {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #4a90d9;
+            margin-bottom: 2px;
+        }
+        .notif .message {
+            font-size: 0.95rem;
+            margin-bottom: 2px;
+        }
+        .notif .time {
+            font-size: 0.75rem;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Notifications Demo</h1>
+        <p class="subtitle">Real-time push via Flask-SocketIO + MongoDB middleware pipeline, similar in structure to how mongoose middlewares work.</p>
+
+        <div>
+            <span id="status" class="status connecting">Connecting...</span>
+        </div>
+
+        <button id="sendBtn" disabled onclick="sendNotification()">Send "Hi!"</button>
+
+        <div class="feed">
+            <div class="feed-header">Live Feed</div>
+            <div id="feed-body">
+                <div class="feed-empty" id="empty-msg">No notifications yet. Click the button above.</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const USER_ID = "{{ user_id }}";
+        const statusEl = document.getElementById('status');
+        const feedBody = document.getElementById('feed-body');
+        const emptyMsg = document.getElementById('empty-msg');
+        const sendBtn  = document.getElementById('sendBtn');
+
+        let socket;
+
+        function initSocket(jwt) {
+            socket = io('/notifications', {
+                extraHeaders: { jwt: jwt },
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'status connected';
+                sendBtn.disabled = false;
+            });
+
+            socket.on('disconnect', () => {
+                statusEl.textContent = 'Disconnected';
+                statusEl.className = 'status disconnected';
+                sendBtn.disabled = true;
+            });
+
+            socket.on('all_notifications', (data) => {
+                if (data && data.length > 0) {
+                    emptyMsg.style.display = 'none';
+                    data.forEach(n => addNotification(n));
+                }
+            });
+
+            socket.on('new_notification', (data) => {
+                emptyMsg.style.display = 'none';
+                addNotification(data, true);
+            });
+        }
+
+        function addNotification(n, prepend = false) {
+            const div = document.createElement('div');
+            div.className = 'notif';
+
+            const ts = n.notification_created_at
+                ? new Date(n.notification_created_at * 1000).toLocaleTimeString()
+                : '';
+
+            div.innerHTML = `
+                <div class="type">${n.notification_type || 'info'}</div>
+                <div class="message">Hi!</div>
+                <div class="time">${ts}</div>
+            `;
+
+            if (prepend) {
+                feedBody.insertBefore(div, feedBody.firstChild.nextSibling || null);
+            } else {
+                feedBody.appendChild(div);
+            }
+        }
+
+        function sendNotification() {
+            sendBtn.disabled = true;
+            fetch('/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: USER_ID })
+            })
+            .then(r => r.json())
+            .then(() => { sendBtn.disabled = false; })
+            .catch(() => { sendBtn.disabled = false; });
+        }
+
+        fetch('/jwt')
+            .then(r => r.json())
+            .then(data => {
+                if (data.token) {
+                    initSocket(data.token);
+                } else {
+                    statusEl.textContent = 'No user. Run seed.py first.';
+                    statusEl.className = 'status disconnected';
+                }
+            })
+            .catch(() => {
+                statusEl.textContent = 'Error fetching token';
+                statusEl.className = 'status disconnected';
+            });
+    </script>
+</body>
+</html>

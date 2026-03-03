@@ -1,0 +1,9 @@
+flask
+flask-socketio
+flask-jwt-extended
+flask-cors
+pymongo
+marshmallow
+python-dotenv
+python-socketio[asyncio_client]
+PyJWT
