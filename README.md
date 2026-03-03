@@ -69,7 +69,7 @@ test/
 ## Setup
 
 ```bash
-cd test/
+cd flask-local-db-notifications/
 
 # 1. Create and activate a virtual environment
 python -m venv venv
@@ -79,14 +79,12 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3. Create your .env file
-cp .env.example .env
-# Edit .env and set a real JWT_SECRET_KEY (any random string works)
+# Edit .env and set a real JWT_SECRET_KEY, MONGODB_DATABSE, MONGODB_URI, SERVER_URL, and SERVER_SECRET_KEY variables.
 
 # 4. Seed a demo user
 python seed.py
-# This prints the user ID and a JWT -- the web UI fetches its own
-# JWT automatically, so you can ignore this unless you want to
-# test with curl.
+# This prints the user ID and a JWT
+# JWT automatically.
 
 # 5. Start the server
 python app.py
